@@ -2,100 +2,72 @@ clc;
 clear;
 close all;
 
-% Step 1: Setup Environment
-numDevices = 200;                 % Number of IoT devices
-numIterations = 100;              % Number of simulation iterations
-maxPower = 1;                     % Maximum transmission power (Watt)
-queueSize = zeros(1, numDevices); % Initial queue size (MB)
-trafficLoad = randi([1,5], 1, numDevices); % Initial random traffic (MB)
-channelQuality = rand(1, numDevices); % Initial random channel quality [0-1]
+% Parameters
+iterations = 50;
+initial_delay = 10; % ms
+initial_bit_rate = 1; % Mbps
+delay_reduction_factor = 0.95;
+bitrate_reduction_factor = 0.98;
 
-% Storage Variables
-avgDelay = zeros(1, numIterations);
-totalThroughput = zeros(1, numIterations);
-totalPowerUsed = zeros(1, numIterations);
-queueEvolution = zeros(numIterations, 5); % Queue evolution of 5 random devices
-selectedDevicesIndices = randperm(numDevices, 5); % Select 5 random devices for observation
+delay = zeros(1, iterations);
+bit_rate = zeros(1, iterations);
+operating_period = zeros(1, iterations);
+interference = zeros(1, iterations);
 
-% Step 2 & 3: Run Simulation Loop
-for iter = 1:numIterations
-    % Update Traffic and Channel Dynamically
-    trafficLoad = randi([0,2], 1, numDevices);  % New burst traffic (0–2 MB)
-    channelQuality = rand(1, numDevices);       % New random SNR
-
-    % Priority Assignment
-    priority = (queueSize + trafficLoad) ./ (channelQuality + 0.01);
-
-    % Dynamic User Scheduling: Select Top 20% Users
-    [~, sortedIndices] = sort(priority, 'descend');
-    scheduledUsers = sortedIndices(1:round(0.2 * numDevices)); 
-
-    % Adaptive Power Allocation
-    powerAlloc = zeros(1, numDevices);
-    powerAlloc(scheduledUsers) = maxPower * (1 - channelQuality(scheduledUsers));
-
-    % Calculate Data Rate: using simplified Shannon formula
-    dataRate = log2(1 + (powerAlloc .* channelQuality));  % in Mbps approx.
-
-    % Update Queues and Delays
-    servedData = dataRate * 0.1; % Assume transmission slot = 0.1s
-    queueSize = max(queueSize + trafficLoad - servedData, 0);
-
-    % Record Metrics
-    avgDelay(iter) = mean(queueSize ./ (dataRate + 0.01)); % Average delay
-    totalThroughput(iter) = sum(servedData);               % Total throughput
-    totalPowerUsed(iter) = sum(powerAlloc);                 % Power usage
-
-    % Record queue evolution for 5 random devices
-    queueEvolution(iter, :) = queueSize(selectedDevicesIndices);
+% Main Delay Minimization Loop
+for i = 1:iterations
+    delay(i) = initial_delay * (delay_reduction_factor ^ i);
+    bit_rate(i) = initial_bit_rate * (bitrate_reduction_factor ^ i);
+    operating_period(i) = delay(i) * bit_rate(i);
+    interference(i) = rand() * 2; % Random interference (0 to 2)
 end
 
-% Step 4: Plot Visualizations
-
-% 📈 Visualization 1: Average Delay vs Iterations
+% Plot 1: Operating Period vs Iterations
 figure;
-plot(1:numIterations, avgDelay, 'LineWidth', 2, 'Color', 'b');
-title('Average Delay vs Iterations');
+plot(1:iterations, operating_period, '-o', 'LineWidth', 2);
 xlabel('Iterations');
-ylabel('Average Delay (ms)');
+ylabel('Operating Period (ms*Mbps)');
+title('Operating Period vs Iterations');
 grid on;
 
-%  Visualization 2: Queue Length Evolution (for 5 Devices)
+% Plot 2: Total Interference vs Iterations
 figure;
-plot(1:numIterations, queueEvolution, 'LineWidth', 1.5);
-title('Queue Length Evolution for 5 Random Devices');
+plot(1:iterations, interference, '-s', 'LineWidth', 2, 'Color', 'r');
 xlabel('Iterations');
-ylabel('Queue Size (MB)');
-legend('Device 1','Device 2','Device 3','Device 4','Device 5');
+ylabel('Total Interference');
+title('Total Interference vs Iterations');
 grid on;
 
-% Visualization 3: Power Usage Distribution
-figure;
-plot(1:numIterations, totalPowerUsed, 'LineWidth', 2, 'Color', 'm');
-title('Total Power Usage vs Iterations');
-xlabel('Iterations');
-ylabel('Power Used (Watt)');
-grid on;
-
-% Visualization 4: Throughput vs Number of Devices
-deviceRange = 50:50:500; % Number of devices 50 to 500
-throughputPerDevice = zeros(size(deviceRange));
-
-for d = 1:length(deviceRange)
-    % Re-run mini simulation for throughput testing
-    devices = deviceRange(d);
-    powerAlloc = maxPower * rand(1, devices);
-    channelQuality = rand(1, devices);
-    dataRate = log2(1 + (powerAlloc .* channelQuality));
-    throughputPerDevice(d) = mean(dataRate);
-end
+% Additional Plots
+% Number of Devices vs Average Operating Period
+devices = 10:10:100;
+avg_operating_period = operating_period(end) ./ devices;
 
 figure;
-bar(deviceRange, throughputPerDevice, 'FaceColor', [0.2 0.6 0.8]);
-title('Average Throughput vs Number of Devices');
+plot(devices, avg_operating_period, '-x', 'LineWidth', 2, 'Color', 'm');
 xlabel('Number of Devices');
-ylabel('Throughput per Device (Mbps)');
+ylabel('Avg Operating Period');
+title('Avg Operating Period vs Number of Devices');
 grid on;
 
+% Transmission Power vs Avg Operating Period
+transmit_power = 0.1:0.1:1.0;
+avg_op_period_power = operating_period(end) ./ (2 * transmit_power); % simple scaling
 
+figure;
+plot(transmit_power, avg_op_period_power, '-^', 'LineWidth', 2, 'Color', 'g');
+xlabel('Max Transmission Power (Watts)');
+ylabel('Avg Operating Period');
+title('Avg Operating Period vs Transmission Power');
+grid on;
 
+% Traffic Volume vs Avg Operating Period
+traffic_volumes = 0:10:100;
+avg_op_period_traffic = operating_period(end) * (1 + 0.01 * traffic_volumes); % delay increases slightly
+
+figure;
+plot(traffic_volumes, avg_op_period_traffic, '-*', 'LineWidth', 2, 'Color', 'b');
+xlabel('Traffic Volume');
+ylabel('Avg Operating Period');
+title('Avg Operating Period vs Traffic Volume');
+grid on;
